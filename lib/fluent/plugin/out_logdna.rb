@@ -61,7 +61,7 @@ module Fluent
     def write(chunk)
       body = chunk_to_body(chunk)
       response = send_request(body)
-      raise "Encountered server error" if response.code >= 400
+      raise "Encountered server error #{response.body}" if response.code >= 400
 
       response.flush
     end
@@ -79,24 +79,25 @@ module Fluent
       { lines: data }
     end
 
-    def gather_line_data(tag, time, record)
-      line = {
-        level: record["level"] || record["severity"] || tag.split(".").last,
-        timestamp: time,
-        line: record.to_json
+    def gather_line_data(_tag, _time, record)
+      {
+        host: record["host"],
+        line: record["log"],
+        level: "info",
+        app: record["app"],
+        meta: {
+          file: record["file"],
+          service: record["service"],
+          container: record["container"],
+          stream: record["stream"],
+          version: record["@version"],
+          source: record["source"],
+          host: record["host"],
+          offset: record["offset"],
+          layer: record["layer"],
+          app_id: record["app_id"]
+        }
       }
-      # At least one of "file" or "app" is required.
-      line[:file] = record["file"]
-      line[:file] ||= @file if @file
-      line.delete(:file) if line[:file].nil?
-      line[:app] = record["_app"] || record["app"]
-      line[:app] ||= @app if @app
-      line.delete(:app) if line[:app].nil?
-      line[:env] = record["env"]
-      line.delete(:env) if line[:env].nil?
-      line[:meta] = record["meta"]
-      line.delete(:meta) if line[:meta].nil?
-      line
     end
 
     def send_request(body)
