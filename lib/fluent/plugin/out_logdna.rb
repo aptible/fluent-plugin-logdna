@@ -80,11 +80,11 @@ module Fluent
     end
 
     def gather_line_data(_tag, _time, record)
-      {
+      line = {
         host: record["host"],
         line: record["log"],
         level: "info",
-        app: record["app"],
+        app: record["app"] || record["database"],
         meta: {
           file: record["file"],
           service: record["service"],
@@ -95,9 +95,12 @@ module Fluent
           host: record["host"],
           offset: record["offset"],
           layer: record["layer"],
-          app_id: record["app_id"]
         }
       }
+
+      %w[log host app level].each { |k| record.delete(k) }
+      line[:meta].merge!(record)
+      line
     end
 
     def send_request(body)
@@ -110,3 +113,4 @@ module Fluent
     end
   end
 end
+
