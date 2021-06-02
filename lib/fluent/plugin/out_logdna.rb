@@ -9,19 +9,19 @@ module Fluent
     MAX_RETRIES = 5
 
     config_param :api_key, :string, secret: true
-    config_param :hostname, :string
-    config_param :mac, :string, default: nil
-    config_param :tags, :string, default: nil
-    config_param :ip, :string, default: nil
-    config_param :app, :string, default: nil
-    config_param :file, :string, default: nil
+    config_param :hostname, :string, default: :aptible
     config_param :ingester_domain, :string, default: "https://logs.logdna.com"
     config_param :ingester_endpoint, :string, default: "/logs/ingest"
     config_param :request_timeout, :string, default: "30"
+    config_param :tags, :string, default: nil
 
     def configure(conf)
       super
       @host = conf["hostname"]
+      @tags = conf["tags"]
+
+      @tags_hash = {}
+      @tags_hash = URI.decode_www_form(@tags).to_h.transform_keys(&:to_sym) if @tags
 
       # make these two variables globals
       timeout_unit_map = { s: 1.0, ms: 0.001 }
@@ -99,13 +99,21 @@ module Fluent
       }
 
       %w[log host app level].each { |k| record.delete(k) }
-      line[:meta].merge!(record)
+      line[:meta].merge!(record.transform_keys(&:to_sym))
+
+      # Any fields that are passed in as tags should
+      # be overriden by the tags
+      line.merge!(@tags_hash) if @tags
+
       line
     end
 
     def send_request(body)
       now = Time.now.to_i
-      url = "#{@ingester_endpoint}?hostname=#{@host}&mac=#{@mac}&ip=#{@ip}&now=#{now}&tags=#{@tags}"
+      params = "?hostname=#{@host}&now=#{now}"
+      params = "#{params}&#{@tags}" if @tags
+      url = "#{@ingester_endpoint}#{params}"
+
       @ingester.headers("apikey" => @api_key,
                         "content-type" => "application/json")
                .timeout(connect: @request_timeout, write: @request_timeout, read: @request_timeout)
@@ -113,4 +121,3 @@ module Fluent
     end
   end
 end
-
